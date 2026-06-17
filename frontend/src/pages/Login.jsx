@@ -2,15 +2,15 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { useNavigate } from 'react-router-dom';
 
-const DEMO_CREDS = [
-  { name: 'System Admin', email: 'admin@aadi.local', role: 'ADMIN', password: 'admin123' },
-  { name: 'Meera Iyer', email: 'meera.manager@aadi.local', role: 'MANAGER', password: 'manager123' },
-  { name: 'Riya Mehta', email: 'riya.rm@aadi.local', role: 'RM', password: 'rm123' },
-  { name: 'Arjun Shah', email: 'arjun.rm@aadi.local', role: 'RM', password: 'rm123' },
-  { name: 'Kabir Khan', email: 'kabir.resource@aadi.local', role: 'RESOURCE', password: 'resource123' },
-  { name: 'Sana Rao', email: 'sana.resource@aadi.local', role: 'RESOURCE', password: 'resource123' },
-  { name: 'Lead Desk', email: 'desk@aadi.local', role: 'EMPLOYEE', password: 'employee123' }
-];
+// const DEMO_CREDS = [
+//   { name: 'System Admin', email: 'admin@aadi.local', role: 'ADMIN', password: 'admin123' },
+//   { name: 'Meera Iyer', email: 'meera.manager@aadi.local', role: 'MANAGER', password: 'manager123' },
+//   { name: 'Riya Mehta', email: 'riya.rm@aadi.local', role: 'RM', password: 'rm123' },
+//   { name: 'Arjun Shah', email: 'arjun.rm@aadi.local', role: 'RM', password: 'rm123' },
+//   { name: 'Kabir Khan', email: 'kabir.resource@aadi.local', role: 'RESOURCE', password: 'resource123' },
+//   { name: 'Sana Rao', email: 'sana.resource@aadi.local', role: 'RESOURCE', password: 'resource123' },
+//   { name: 'Lead Desk', email: 'desk@aadi.local', role: 'EMPLOYEE', password: 'employee123' }
+// ];
 
 export default function Login() {
   const { login } = useAuth();
@@ -74,7 +74,7 @@ export default function Login() {
           </form>
         </section>
 
-        <section className="panel">
+        {/* <section className="panel">
           <h2>Demo Staff Credentials</h2>
           <p>Use these to test role-based reports and lead visibility.</p>
           {DEMO_CREDS.map(u => (
@@ -86,7 +86,7 @@ export default function Login() {
               <b>{u.password}</b>
             </div>
           ))}
-        </section>
+        </section> */}
       </div>
     </div>
   );
