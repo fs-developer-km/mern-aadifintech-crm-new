@@ -17,7 +17,10 @@ const NAV_ROUTES = {
 };
 
 export default function AppShell() {
-  const { user, setUser, logout, can } = useAuth();
+  // const { user, setUser, logout, can } = useAuth();
+
+   const { user, logout, can, viewAs, restoreAdmin } = useAuth(); 
+
   const { settings } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,22 +44,26 @@ export default function AppShell() {
   const visibleNav = NAV.filter(n => can(n, settings));
 
   // Admin can switch view to simulate another user's perspective
-  const handleViewAs = (userId) => {
+ const handleViewAs = async (userId) => {
     if (user.role !== 'ADMIN') return;
-    const found = allUsers.find(u => u._id === userId);
-    if (found) {
-      // Temporarily set user context (does NOT change JWT — only view simulation)
-      setUser({ ...found, _viewAs: true, _realAdminId: user._id });
+    try {
+      await viewAs(userId);
       navigate('/');
+    } catch (err) {
+      console.error('Impersonate failed', err);
     }
   };
 
-  const handleRestoreAdmin = () => {
-    api.get('/auth/me').then(r => {
-      setUser(r.data.user);
+  const handleRestoreAdmin = async () => {
+    try {
+      await restoreAdmin();
       navigate('/');
-    }).catch(() => {});
+    } catch (err) {
+      console.error('Restore admin failed', err);
+    }
   };
+
+  
 
   return (
     <div className="app">

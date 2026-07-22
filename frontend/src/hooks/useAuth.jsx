@@ -13,7 +13,6 @@ export const AuthProvider = ({ children }) => {
       api.get('/auth/me')
         .then(r => setUser(r.data.user))
         .catch(() => {
-          // Token invalid — clear it, don't loop
           localStorage.removeItem('finlead_token');
         })
         .finally(() => setLoading(false));
@@ -31,7 +30,28 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('finlead_token');
+    localStorage.removeItem('finlead_admin_token');
     setUser(null);
+  };
+
+  // 🆕 Admin kisi RM/Manager ko "view as" karta hai — asli JWT switch hota hai
+  const viewAs = async (userId) => {
+    const currentToken = localStorage.getItem('finlead_token');
+    const r = await api.post(`/auth/impersonate/${userId}`);
+    // Admin ka original token safe rakho, taki "Restore Admin" kaam kare
+    localStorage.setItem('finlead_admin_token', currentToken);
+    localStorage.setItem('finlead_token', r.data.token);
+    setUser({ ...r.data.user, _viewAs: true });
+  };
+
+  // 🆕 Admin token wapas restore karo
+  const restoreAdmin = async () => {
+    const adminToken = localStorage.getItem('finlead_admin_token');
+    if (!adminToken) return;
+    localStorage.setItem('finlead_token', adminToken);
+    localStorage.removeItem('finlead_admin_token');
+    const r = await api.get('/auth/me');
+    setUser(r.data.user);
   };
 
   const can = (screen, settings) => {
@@ -44,7 +64,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, logout, can, loading }}>
+    <AuthContext.Provider value={{ user, setUser, login, logout, can, loading, viewAs, restoreAdmin }}>
       {children}
     </AuthContext.Provider>
   );

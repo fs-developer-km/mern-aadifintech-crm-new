@@ -41,3 +41,29 @@ export const changePassword = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+// this is function for change login in admin panel
+
+export const impersonate = async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+    const target = await User.findById(req.params.userId);
+    if (!target || !target.active) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Naya token target user ke liye — audit ke liye impersonatedBy bhi save karte hain
+    const token = jwt.sign(
+      { id: target._id, impersonatedBy: req.user._id },
+      process.env.JWT_SECRET || 'finlead_secret',
+      { expiresIn: '2h' }
+    );
+
+    res.json({ token, user: target.toSafeObject() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

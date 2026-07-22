@@ -40,15 +40,37 @@ export const createUser = async (req, res) => {
 };
 
 // Update user
+// export const updateUser = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const allowed = ['name', 'mobile', 'role', 'manager', 'rm', 'capacity', 'city', 'title', 'target', 'active'];
+//     const updates = {};
+//     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+
+//     const user = await User.findByIdAndUpdate(id, updates, { new: true }).select('-password');
+//     if (!user) return res.status(404).json({ error: 'User not found' });
+//     res.json(user);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
+    const target = await User.findById(id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    // Manager sirf apni team (jinka manager field uska naam hai) edit kar sakta hai
+    if (req.user.role === 'MANAGER' && target.manager !== req.user.name) {
+      return res.status(403).json({ error: 'Forbidden: not in your team' });
+    }
+
     const allowed = ['name', 'mobile', 'role', 'manager', 'rm', 'capacity', 'city', 'title', 'target', 'active'];
     const updates = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
 
     const user = await User.findByIdAndUpdate(id, updates, { new: true }).select('-password');
-    if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -71,10 +93,47 @@ export const resetPassword = async (req, res) => {
 };
 
 // Get RMs / resources / managers for dropdowns
+// export const getByRole = async (req, res) => {
+//   try {
+//     const { role } = req.params;
+//     const users = await User.find({ role: role.toUpperCase(), active: true }).select('name email mobile city manager rm _id');
+//     res.json(users);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
 export const getByRole = async (req, res) => {
   try {
     const { role } = req.params;
-    const users = await User.find({ role: role.toUpperCase(), active: true }).select('name email mobile city manager rm _id');
+    const targetRole = role.toUpperCase();
+    const { role: reqRole, name: reqName } = req.user;
+
+    let query = { role: targetRole, active: true };
+
+    if (reqRole === 'ADMIN') {
+      // Admin ko sab dikhega, koi extra restriction nahi
+    } else if (reqRole === 'MANAGER') {
+      if (targetRole === 'RM') {
+        query.manager = reqName; // sirf apni team ke RMs
+      } else if (targetRole === 'RESOURCE') {
+        const myRms = await User.find({ role: 'RM', manager: reqName }).select('name').lean();
+        query.rm = { $in: myRms.map(r => r.name) }; // sirf apni RMs ke resources
+      } else {
+        return res.json([]); // manager ko doosre managers/admin list nahi chahiye
+      }
+    } else if (reqRole === 'RM') {
+      if (targetRole === 'RESOURCE') {
+        query.rm = reqName; // sirf apne resources
+      } else {
+        return res.json([]); // RM ko RM/Manager list ki zarurat nahi
+      }
+    } else {
+      return res.json([]); // RESOURCE ya koi aur role — dropdown access nahi
+    }
+
+    const users = await User.find(query).select('name email mobile city manager rm _id');
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });

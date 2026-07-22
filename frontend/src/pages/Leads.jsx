@@ -1,39 +1,86 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api.js';
 import { useSettings } from '../hooks/useSettings.jsx';
 import { money } from '../utils/constants.js';
+import { useAuth } from '../hooks/useAuth.jsx';
+
+const PAGE_SIZE = 50;
 
 export default function Leads() {
   const { stages } = useSettings();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);       // pehli load (poori table)
+  const [loadingMore, setLoadingMore] = useState(false); // scroll pe next batch
+  const [hasMore, setHasMore] = useState(true);
   const [rms, setRms] = useState([]);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [rmFilter, setRmFilter] = useState('');
 
-  const fetchLeads = useCallback(async () => {
-    setLoading(true);
+  const loaderRef = useRef(null);
+
+  const canFilterByRm = user.role === 'ADMIN' || user.role === 'MANAGER';
+
+  // ── Fetch a specific page ──────────────────────────────────────────────
+  const fetchLeads = useCallback(async (pageNum, append = false) => {
+    if (append) setLoadingMore(true); else setLoading(true);
     try {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
       if (status) params.set('status', status);
       if (rmFilter) params.set('rm', rmFilter);
+      params.set('page', pageNum);
+      params.set('limit', PAGE_SIZE);
+
       const r = await api.get(`/leads?${params}`);
-      setLeads(r.data.leads);
-      setTotal(r.data.total);
+      const newLeads = r.data.leads || [];
+
+      setLeads(prev => append ? [...prev, ...newLeads] : newLeads);
+      setTotal(r.data.total || 0);
+      setHasMore(pageNum * PAGE_SIZE < (r.data.total || 0));
     } catch (e) {}
-    finally { setLoading(false); }
+    finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   }, [q, status, rmFilter]);
 
-  useEffect(() => { fetchLeads(); }, [fetchLeads]);
-
+  // ── Jab filters change ho → reset page 1 se ─────────────────────────────
   useEffect(() => {
-    api.get('/users/by-role/RM').then(r => setRms(r.data)).catch(() => {});
-  }, []);
+    setPage(1);
+    fetchLeads(1, false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, status, rmFilter]);
+
+  // ── RM list (Admin/Manager only) ────────────────────────────────────────
+  useEffect(() => {
+    if (canFilterByRm) {
+      api.get('/users/by-role/RM').then(r => setRms(r.data)).catch(() => {});
+    }
+  }, [canFilterByRm]);
+
+  // ── Infinite scroll observer ────────────────────────────────────────────
+  useEffect(() => {
+    if (!loaderRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          const nextPage = page + 1;
+          setPage(nextPage);
+          fetchLeads(nextPage, true);
+        }
+      },
+      { threshold: 1 }
+    );
+    observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [page, hasMore, loading, loadingMore, fetchLeads]);
 
   const exportCsv = async () => {
     const params = new URLSearchParams();
@@ -68,7 +115,6 @@ export default function Leads() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="panel row" style={{ marginBottom: 14 }}>
         <input
           className="field" style={{ maxWidth: 320 }}
@@ -79,10 +125,12 @@ export default function Leads() {
           <option value="">All stages</option>
           {stages.map(s => <option key={s}>{s}</option>)}
         </select>
-        <select className="field" style={{ maxWidth: 210 }} value={rmFilter} onChange={e => setRmFilter(e.target.value)}>
-          <option value="">All RMs</option>
-          {rms.map(r => <option key={r._id}>{r.name}</option>)}
-        </select>
+        {canFilterByRm && (
+          <select className="field" style={{ maxWidth: 210 }} value={rmFilter} onChange={e => setRmFilter(e.target.value)}>
+            <option value="">All RMs</option>
+            {rms.map(r => <option key={r._id}>{r.name}</option>)}
+          </select>
+        )}
       </div>
 
       <div className="panel" style={{ overflow: 'auto' }}>
@@ -147,6 +195,28 @@ export default function Leads() {
             )}
           </tbody>
         </table>
+
+        {/* ── Infinite scroll trigger + chota loader ── */}
+        {!loading && hasMore && (
+          <div ref={loaderRef} style={{ display: 'flex', justifyContent: 'center', padding: '14px 0' }}>
+            {loadingMore ? (
+              <span className="muted" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  width: 14, height: 14, border: '2px solid #ddd', borderTopColor: '#0f766e',
+                  borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite'
+                }} />
+                Loading more leads...
+              </span>
+            ) : (
+              <span style={{ height: 14 }} /> // invisible trigger point
+            )}
+          </div>
+        )}
+
+        <style>{`
+          @keyframes spin { to { transform: rotate(360deg); } }
+        `}</style>
+
         {total > 0 && (
           <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
             Showing {leads.length} of {total} leads

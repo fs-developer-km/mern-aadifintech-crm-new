@@ -5,15 +5,14 @@ const CONVERTED = ['SANCTIONED', 'DISBURSED', 'CLOSED', 'APPROVED'];
 
 const buildFilter = (user, query) => {
   let filter = {};
-  // Role-based visibility
-  if (user.role === 'MANAGER') filter.manager = user.name;
-  else if (user.role === 'RM') filter.rm = user.name;
-  else if (user.role === 'RESOURCE') filter.resource = user.name;
 
   const { employee, manager, rm, branch, product, source, status, from, to, score, search } = query;
-  if (employee) filter.$or = [{ resource: employee }, { rm: employee }, { manager: employee }];
+
+  // Ye sab query filters sirf ADMIN ke liye poori tarah free honge.
+  // Non-admin ke liye bhi allow karenge, but role-restriction end me force hoga.
   if (manager) filter.manager = manager;
   if (rm) filter.rm = rm;
+  if (employee) filter.$or = [{ resource: employee }, { rm: employee }, { manager: employee }];
   if (branch) filter.city = branch;
   if (product) filter.main = product;
   if (source) filter.source = source;
@@ -31,8 +30,47 @@ const buildFilter = (user, query) => {
       { resource: s }, { rm: s }, { manager: s }, { city: s }
     ];
   }
+
+  // Role-based scope hamesha final aur non-negotiable hoga
+  if (user.role === 'MANAGER') filter.manager = user.name;
+  else if (user.role === 'RM') filter.rm = user.name;
+  else if (user.role === 'RESOURCE') filter.resource = user.name;
+  // ADMIN ke liye koi restriction nahi
+
   return filter;
 };
+
+
+// const buildFilter = (user, query) => {
+//   let filter = {};
+//   // Role-based visibility
+//   if (user.role === 'MANAGER') filter.manager = user.name;
+//   else if (user.role === 'RM') filter.rm = user.name;
+//   else if (user.role === 'RESOURCE') filter.resource = user.name;
+
+//   const { employee, manager, rm, branch, product, source, status, from, to, score, search } = query;
+//   if (employee) filter.$or = [{ resource: employee }, { rm: employee }, { manager: employee }];
+//   if (manager) filter.manager = manager;
+//   if (rm) filter.rm = rm;
+//   if (branch) filter.city = branch;
+//   if (product) filter.main = product;
+//   if (source) filter.source = source;
+//   if (status) filter.status = status;
+//   if (score) filter.score = { $gte: Number(score) };
+//   if (from || to) {
+//     filter.createdAt = {};
+//     if (from) filter.createdAt.$gte = new Date(from);
+//     if (to) filter.createdAt.$lte = new Date(to + 'T23:59:59');
+//   }
+//   if (search) {
+//     const s = { $regex: search, $options: 'i' };
+//     filter.$or = [
+//       { name: s }, { mobile: s }, { email: s },
+//       { resource: s }, { rm: s }, { manager: s }, { city: s }
+//     ];
+//   }
+//   return filter;
+// };
 
 export const getMisReport = async (req, res) => {
   try {

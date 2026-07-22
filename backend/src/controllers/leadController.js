@@ -11,13 +11,14 @@ const visibilityFilter = (user) => {
   return {};
 };
 
+
 export const getLeads = async (req, res) => {
   try {
     const { q, status, rm, source, main, from, to, score, page = 1, limit = 50 } = req.query;
-    let filter = visibilityFilter(req.user);
+
+    let filter = {};
 
     if (status) filter.status = status;
-    if (rm) filter.rm = rm;
     if (source) filter.source = source;
     if (main) filter.main = main;
     if (score) filter.score = { $gte: Number(score) };
@@ -36,6 +37,17 @@ export const getLeads = async (req, res) => {
       ];
     }
 
+    // Sirf ADMIN hi 'rm' query param se filter kar sakta hai (kisi bhi RM ka data dekhne ke liye)
+    if (rm && req.user.role === 'ADMIN') filter.rm = rm;
+
+    // Role-based visibility SABSE LAST me apply hoga — isse koi query param
+    // isko overwrite nahi kar payega
+    Object.assign(filter, visibilityFilter(req.user));
+
+        // 🔍 DEBUG — ye line add karo
+    console.log('LOGGED IN USER:', req.user.name, '| ROLE:', req.user.role);
+    console.log('FINAL FILTER:', JSON.stringify(filter));
+
     const skip = (Number(page) - 1) * Number(limit);
     const [leads, total] = await Promise.all([
       Lead.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
@@ -46,6 +58,43 @@ export const getLeads = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+// export const getLeads = async (req, res) => {
+//   try {
+//     const { q, status, rm, source, main, from, to, score, page = 1, limit = 50 } = req.query;
+//     let filter = visibilityFilter(req.user);
+
+//     if (status) filter.status = status;
+//     if (rm) filter.rm = rm;
+//     if (source) filter.source = source;
+//     if (main) filter.main = main;
+//     if (score) filter.score = { $gte: Number(score) };
+//     if (from || to) {
+//       filter.createdAt = {};
+//       if (from) filter.createdAt.$gte = new Date(from);
+//       if (to) filter.createdAt.$lte = new Date(to + 'T23:59:59');
+//     }
+//     if (q) {
+//       filter.$or = [
+//         { name: { $regex: q, $options: 'i' } },
+//         { mobile: { $regex: q, $options: 'i' } },
+//         { email: { $regex: q, $options: 'i' } },
+//         { city: { $regex: q, $options: 'i' } },
+//         { pan: { $regex: q, $options: 'i' } }
+//       ];
+//     }
+
+//     const skip = (Number(page) - 1) * Number(limit);
+//     const [leads, total] = await Promise.all([
+//       Lead.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
+//       Lead.countDocuments(filter)
+//     ]);
+//     res.json({ leads, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
 
 export const getLead = async (req, res) => {
   try {

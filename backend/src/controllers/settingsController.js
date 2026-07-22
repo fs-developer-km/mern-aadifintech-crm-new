@@ -3,16 +3,17 @@ import Settings from '../models/Settings.js';
 const DEFAULT_SETTINGS = {
   org: { name: 'Aadi Fintech Financial Hub', branch: 'Noida Sector 62', currency: 'INR', accent: '#0f766e' },
   custom: {
-    statuses: ['NEW','QUALIFIED','CONTACTED','FOLLOW_UP','IN_PROGRESS','DOCUMENT_COLLECTED','LOGIN_BANK','SANCTIONED','DISBURSED','REJECTED','CLOSED'],
+    statuses:  ['NEW','QUALIFIED','CONTACTED','FOLLOW_UP','IN_PROGRESS','DOCUMENT_COLLECTED','LOGIN_BANK','SANCTIONED','DISBURSED','REJECTED','CLOSED'],
     products: {
       Investment: ['Mutual Fund (SIP / Lumpsum)', 'Fixed Deposit', 'Portfolio Management Service (PMS)', 'Bonds', 'Stock Advisory'],
-      Loan: ['Home Loan', 'Personal Loan', 'Business Loan', 'Loan Against Property', 'Car Loan', 'Education Loan'],
-      Insurance: ['Life Insurance (Term / ULIP / Endowment)', 'Health Insurance', 'Motor Insurance', 'Business Insurance']
+      Loan:       ['Home Loan', 'Personal Loan', 'Business Loan', 'Loan Against Property', 'Car Loan', 'Education Loan','MSME Loan'],
+      Insurance:  ['Life Insurance (Term / ULIP / Endowment)', 'Health Insurance', 'Motor Insurance', 'Business Insurance']
     },
-    sources: ['Website Organic','Google Ads','Facebook / Instagram Ads','YouTube','WhatsApp Campaign','Referral','Walk-in','Telecalling','Partner / DSA','Connector','Other'],
+    sources:   ['Website Organic','Google Ads','Facebook / Instagram Ads','YouTube','WhatsApp Campaign','Referral','Walk-in','Telecalling','Partner / DSA','Connector','Other'],
     documents: ['PAN Card','Aadhaar / Address Proof','Bank Statement','Income Proof'],
-    branches: ['Noida Sector 62'],
-    fields: []
+    branches:  ['Noida Sector 62'],
+    fields:    [],
+    roles:     ['CONNECTOR', 'CA', 'BANKER', 'INTERN']   // ← custom roles
   },
   permissions: {
     MANAGER:  { Dashboard:1, Leads:1, 'Lead Capture':1, 'Team Members':1, 'Assignment Channel':1, Reports:1, 'Access Control':0, Personalisation:0 },
@@ -32,56 +33,61 @@ const getOrCreate = async () => {
 };
 
 const toPlain = (s) => {
-  const plain = s.toObject ? s.toObject() : s;
-  // Convert Map -> plain object for products
+  const plain = s.toObject ? s.toObject() : { ...s };
+
+  // Map → plain object for products
   if (plain.custom?.products instanceof Map) {
     plain.custom.products = Object.fromEntries(plain.custom.products);
-  } else if (plain.custom?.products && typeof plain.custom.products === 'object' && !Array.isArray(plain.custom.products)) {
-    // already plain
   }
-  // Convert Map -> plain object for permissions
+
+  // Map → plain object for permissions
   if (plain.permissions instanceof Map) {
-    const permsObj = {};
+    const obj = {};
     for (const [role, permsMap] of plain.permissions) {
-      permsObj[role] = permsMap instanceof Map ? Object.fromEntries(permsMap) : permsMap;
+      obj[role] = permsMap instanceof Map ? Object.fromEntries(permsMap) : permsMap;
     }
-    plain.permissions = permsObj;
+    plain.permissions = obj;
   }
+
   return plain;
 };
 
+// ─── GET /settings (public) ────────────────────────────────────────────────
 export const getSettings = async (req, res) => {
   try {
     const s = await getOrCreate();
     res.json(toPlain(s));
   } catch (err) {
-    // Return safe defaults if DB fails
     res.json(DEFAULT_SETTINGS);
   }
 };
 
+// ─── PATCH /settings/org ──────────────────────────────────────────────────
 export const updateOrg = async (req, res) => {
   try {
     const s = await getOrCreate();
-    const allowed = ['name', 'branch', 'currency', 'accent'];
-    allowed.forEach(k => { if (req.body[k] !== undefined) s.org[k] = req.body[k]; });
+    ['name', 'branch', 'currency', 'accent'].forEach(k => {
+      if (req.body[k] !== undefined) s.org[k] = req.body[k];
+    });
     await s.save();
     res.json({ message: 'Org updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── PATCH /settings/system ───────────────────────────────────────────────
 export const updateSystemSettings = async (req, res) => {
   try {
     const s = await getOrCreate();
     const { capacity, slaHours, docSlaDays } = req.body;
-    if (capacity !== undefined) s.settings.capacity = Number(capacity);
-    if (slaHours !== undefined) s.settings.slaHours = Number(slaHours);
+    if (capacity   !== undefined) s.settings.capacity   = Number(capacity);
+    if (slaHours   !== undefined) s.settings.slaHours   = Number(slaHours);
     if (docSlaDays !== undefined) s.settings.docSlaDays = Number(docSlaDays);
     await s.save();
-    res.json({ message: 'System settings updated' });
+    res.json({ message: 'Settings updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── GET /settings/rules ──────────────────────────────────────────────────
 export const getRules = async (req, res) => {
   try {
     const s = await getOrCreate();
@@ -89,21 +95,21 @@ export const getRules = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── POST /settings/rules ─────────────────────────────────────────────────
 export const saveRule = async (req, res) => {
   try {
     const s = await getOrCreate();
     const { product, resource, rm, priority } = req.body;
     const idx = s.rules.findIndex(r => r.product === product);
-    if (idx >= 0) {
-      s.rules[idx] = { product, resource, rm, priority: priority || 1, active: true };
-    } else {
-      s.rules.push({ product, resource, rm, priority: priority || 1, active: true });
-    }
+    const rule = { product, resource, rm, priority: priority || 1, active: true };
+    if (idx >= 0) s.rules[idx] = rule;
+    else s.rules.push(rule);
     await s.save();
     res.json(s.rules);
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── PATCH /settings/rules/:index/toggle ──────────────────────────────────
 export const toggleRule = async (req, res) => {
   try {
     const s = await getOrCreate();
@@ -115,6 +121,7 @@ export const toggleRule = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── DELETE /settings/rules/:index ────────────────────────────────────────
 export const deleteRule = async (req, res) => {
   try {
     const s = await getOrCreate();
@@ -124,6 +131,7 @@ export const deleteRule = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── PATCH /settings/permissions ──────────────────────────────────────────
 export const updatePermissions = async (req, res) => {
   try {
     const s = await getOrCreate();
@@ -137,19 +145,34 @@ export const updatePermissions = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── POST /settings/list/:listName ────────────────────────────────────────
+// Handles: statuses, sources, documents, branches, fields, roles
+// Special: value starting with '__REMOVE__' removes that item
 export const addToList = async (req, res) => {
   try {
     const { listName } = req.params;
     const { value } = req.body;
-    const allowed = ['statuses', 'sources', 'documents', 'branches', 'fields'];
+    const allowed = ['statuses', 'sources', 'documents', 'branches', 'fields', 'roles'];
     if (!allowed.includes(listName)) return res.status(400).json({ error: 'Invalid list' });
+
     const s = await getOrCreate();
-    if (!s.custom[listName].includes(value)) s.custom[listName].push(value);
+
+    if (value.startsWith('__REMOVE__')) {
+      // Remove item
+      const toRemove = value.replace('__REMOVE__', '');
+      s.custom[listName] = (s.custom[listName] || []).filter(x => x !== toRemove);
+    } else {
+      // Add item
+      if (!s.custom[listName]) s.custom[listName] = [];
+      if (!s.custom[listName].includes(value)) s.custom[listName].push(value);
+    }
+
     await s.save();
     res.json(s.custom[listName]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── POST /settings/products ──────────────────────────────────────────────
 export const addProduct = async (req, res) => {
   try {
     const { category, subProduct } = req.body;
@@ -163,6 +186,7 @@ export const addProduct = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+// ─── GET /settings/activities ─────────────────────────────────────────────
 export const getActivities = async (req, res) => {
   try {
     const s = await Settings.findOne().lean();
